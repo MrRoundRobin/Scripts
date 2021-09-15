@@ -16,33 +16,13 @@ param (
 
 $Alias = ($UPN -split '@')[0]
 
-#Requires -Module AzureAD
-
-#region Check for modules
-
-$MFAExchangeModule = ((Get-ChildItem -Path $($env:LOCALAPPDATA + "\Apps\2.0\") -Filter CreateExoPSSession.ps1 -Recurse ).FullName | Select-Object -Last 1)
-
-If ($null -eq $MFAExchangeModule) {
-    'Please install Exchange Online MFA Module.' | Write-Warning
-    
-    Start-Process "https://cmdletpswmodule.blob.core.windows.net/exopsmodule/Microsoft.Online.CSE.PSModule.Client.application"
-
-    Read-Host -Prompt 'Press Enter after installing the Exchange Online MFA Module' | Out-Null
-
-    $MFAExchangeModule = ((Get-ChildItem -Path $($env:LOCALAPPDATA + "\Apps\2.0\") -Filter CreateExoPSSession.ps1 -Recurse ).FullName | Select-Object -Last 1)
-    If ($null -eq $MFAExchangeModule) {
-        throw 'Exchange Online MFA module is not available'
-    }
-}
-
-#endregion Check for MFA module
+#Requires -Module AzureAD,ExchangeOnlineManagement
 
 #region connect
 
 'Connecting...' | Write-Verbose
 
-. "$MFAExchangeModule"
-Connect-EXOPSSession -WarningAction SilentlyContinue | Out-Null
+Connect-ExchangeOnline -ShowBanner:$false
 Connect-AzureAD
 
 #endregion connect
@@ -95,6 +75,5 @@ $License.SkuId = "6070a4c8-34c6-4937-8dfb-39bbc6397a60"
 
 $AssignedLicenses = New-Object -TypeName Microsoft.Open.AzureAD.Model.AssignedLicenses
 $AssignedLicenses.AddLicenses = $License
-$AssignedLicenses.RemoveLicenses = @()
 
 Set-AzureADUserLicense -ObjectId $UPN -AssignedLicenses $AssignedLicenses
