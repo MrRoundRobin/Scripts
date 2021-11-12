@@ -13,6 +13,9 @@ param (
     [ValidateLength(2,2)]
     [string]$UsageLocation = 'DE',
 
+    [ValidateSet('Standard','Premium')]
+    [string]$License = 'Standard',
+
     [switch]$Force
 )
 
@@ -107,12 +110,31 @@ Set-AzureADUser -ObjectId $UPN `
                 -UsageLocation $UsageLocation  `
                 -ErrorAction Stop
 
-'Adding License' | Write-Verbose
+'Checking License' | Write-Verbose
 
-$License = New-Object -TypeName Microsoft.Open.AzureAD.Model.AssignedLicense
-$License.SkuId = "6070a4c8-34c6-4937-8dfb-39bbc6397a60"
+$LicenseMap = @{
+    'Standard' = '6070a4c8-34c6-4937-8dfb-39bbc6397a60'
+    'Premium'  = '03070f91-cc77-4c2e-b269-4a214b3698ab'
+}
 
-$AssignedLicenses = New-Object -TypeName Microsoft.Open.AzureAD.Model.AssignedLicenses
-$AssignedLicenses.AddLicenses = $License
+$CurrentLicenses = Get-AzureADUserLicenseDetail -ObjectId $UPN `
+        | Select-Object -ExpandProperty ServicePlans `
+        | Where-Object { $_.ServicePlanId -in $LicenseMap.Values } `
+        | Select-Object -ExpandProperty ServicePlanId
 
-Set-AzureADUserLicense -ObjectId $UPN -AssignedLicenses $AssignedLicenses -ErrorAction Stop
+if ($CurrentLicenses.Count -eq 1 -and $CurrentLicenses[0] -eq $LicenseMap[$License]) {
+    'License alreay assigned' | Write-Verbose
+} elseif (($CurrentLicenses | Where-Object { $_ -ne $LicenseMap[$License] }).Count -gt 0) {
+    'Wrong license assigned, please use the Portal to manually assign the right one' | Write-Warning
+    #TODO: Fix automaticaly
+} else {
+    'Adding License' | Write-Verbose
+    $NewLicense = New-Object -TypeName Microsoft.Open.AzureAD.Model.AssignedLicense
+    $NewLicense.SkuId = $LicenseMap[$License]
+
+    $AssignedLicenses = New-Object -TypeName Microsoft.Open.AzureAD.Model.AssignedLicenses
+    $AssignedLicenses.AddLicenses = $NewLicense
+
+    Set-AzureADUserLicense -ObjectId $UPN -AssignedLicenses $AssignedLicenses -ErrorAction Stop
+}
+
